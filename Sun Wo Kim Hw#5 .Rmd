@@ -1,0 +1,342 @@
+---
+title: "HW#5 LAB#4"
+author: "Sun Wo Kim, Arifa Begum, Nene Diallo, Maria Camila, Leonardo Alcaide"
+date: "2024-10-04"
+output: html_document
+---
+##Sample 1
+```{r}
+load("/Users/jaydenkim/Desktop/Econometrics/Household_Pulse_data_ph4c2.RData")
+
+#Sample: I decided to measure income with respect to race, education, and age to figure out whether a person’s race affects the wages they earn. I focused on the wages of white and black graduates in the workforce, aged 25-55, with various degrees such as associates, bachelor's, and advanced degrees.
+
+#Null Hypothesis: I am 95% confident that a person’s race affects their salary, and a white person can be expected to have a higher salary than a black person with the same degree.
+
+#First I'm measuring wage so display that: 
+
+library(forcats)
+Household_Pulse_data$income_midpoint <- fct_recode(Household_Pulse_data$INCOME, 
+                                                   "12500" = "HH income less than $25k",
+                                                   "30000" = "HH income $25k - $34.9k",
+                                                   "40000" = "HH income $35k - 49.9",
+                                                   "62500" = "HH income $50k - 74.9",
+                                                   "82500" = "HH income $75 - 99.9",
+                                                   "125000" = "HH income $100k - 149",
+                                                   "175000" = "HH income $150 - 199",
+                                                   "225000" = "HH income $200k +",
+                                                   NULL = "NA")
+Household_Pulse_data$income_midpoint <- as.numeric(levels(Household_Pulse_data$income_midpoint))[Household_Pulse_data$income_midpoint]
+
+summary(Household_Pulse_data$income_midpoint )
+#The variables I want to focus on AGE, RACE,& EDUCATION 
+
+Household_Pulse_data$Age <- 2024 - Household_Pulse_data$TBIRTH_YEAR
+
+#Work base
+
+library(dplyr)
+```
+
+
+```{r eval=FALSE}
+
+race_income <- Household_Pulse_data %>%
+  filter(EEDUC %in% c("assoc deg", "bach deg", "adv deg") &
+         (RRACE == "White" | RRACE == "Black") & 
+         Age >= 25 & Age <= 55)
+
+```
+View(race_income)
+summary(race_income)
+
+
+#model1
+
+```{r eval = FALSE}
+model_1 <- lm(income_midpoint  ~ Age + RRACE + EEDUC, data = race_income)  
+confint(model_1, level = 0.95)
+t_test_result <- t.test(income_midpoint ~ RRACE, data = race_income)
+t_test_result$p.value
+t_test_result$conf.int #format(p_value, scientific = FALSE)
+summary(model_1)
+
+# maybe get fancy
+library(modelsummary)
+modelsummary(model_1, stars = TRUE, gof_map = c("nobs", "r.squared"))
+
+```
+
+#For many of the hypothesis tests, Use the AER package
+require(AER)
+
+```{r eval = FALSE}
+# subset in order to plot...
+NNobs <- length(race_income$income_midpoint)
+set.seed(12345) # just so you can replicate and get same "random" choices
+graph_obs <- (runif(NNobs) < 0.1) # so something like just 1/10 as many obs
+dat_graph <-subset(race_income,graph_obs)  
+library(ggplot2)
+library(ggthemes)  # Ensure this is loaded if you're using a specific theme
+
+
+ggplot(dat_graph, aes(x = interaction(RRACE, EEDUC), y = income_midpoint, color = RRACE)) + 
+  geom_jitter(shape = 16, alpha = 0.7, size = 3) +  
+  ylim(0, 120000) +
+  labs(title = "Income Midpoint by Race and Education Level",
+       x = "Race and Education Level",
+       y = "Income Midpoint") +
+  theme_economist() + 
+  scale_color_brewer(palette = "Set1") +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),  # Adjusts vertical position of the x-axis labels
+    axis.text.y = element_text(angle = 0, hjust = 0.5)             # Keeps y-axis text aligned properly
+  )
+
+
+`````
+
+
+```{r eval = FALSE}
+# Load necessary library
+library(plotly)
+
+# Combine predictions for both racial groups
+Prediction <- data.frame(Age = 25:55, RRACE = "Black", EEDUC = "adv deg")
+Prediction$yhat <- predict(model_1, newdata = Prediction)
+
+Prediction_2 <- data.frame(Age = 25:55, RRACE = "White", EEDUC = "adv deg")
+Prediction_2$yhat <- predict(model_1, newdata = Prediction_2)
+
+# Find the range of yhat values and add some padding to zoom out
+y_range <- range(c(Prediction$yhat, Prediction_2$yhat))
+y_padding <- 0.1 * diff(y_range)  # Add 10% padding to the range
+
+# Create a basic interactive plot using plotly
+p <- plot_ly() %>%
+  add_lines(x = Prediction$Age, y = Prediction$yhat, name = "Black",
+            line = list(color = 'blue')) %>%
+  add_lines(x = Prediction_2$Age, y = Prediction_2$yhat, name = "White",
+            line = list(color = 'red')) %>%
+  layout(title = "Predicted Income by Age for Black and White with Advanced Degree",
+         xaxis = list(title = "Age"),
+         yaxis = list(title = "Predicted Income Midpoint", range = c(y_range[1] - y_padding, y_range[2] + y_padding)),
+         showlegend = TRUE)
+
+# Display the plot
+p
+
+```
+
+#The null hypothesis which assumes there is no difference in income midpoint between racial #groups is rejected because the P-value: 3.13×10−533.13 \times 10^{-53}3.13×10−53 is extremely #small, much less than 0.05. It also does not fall between the two significant levels. 
+#The Confidence Interval which is 95%: [26320.32, 33701.22] does not contain zero.
+#This indicates a statistically significant difference in income between racial groups.
+
+#Conclusion
+
+#Based on our analysis, we can confidently conclude that race significantly affects wages, with #white individuals earning higher salaries than black individuals, even when education levels #are the same. The rejection of the null hypothesis, supported by an extremely small P-value #(3.13×10^-53), suggests that the wage disparity is not due to random chance. Additionally, the #95% confidence interval, ranging from [26,320.32, 33,701.22], does not include zero, further #reinforcing the existence of a statistically significant difference in income between racial #groups. These findings provide strong evidence that racial disparities in income persist even #among individuals with similar educational backgrounds.
+
+
+
+
+
+#Sample 2
+```{r}
+#Sample: I decided to measure income with respect to depression levels and age to determine whether a person’s mental state and age affects the wages they earn. I focused on people aged 25-55 in the workforce, with varying depression levels such as those who feel depressed every day, some days a week, and barely ever.
+
+#Null Hypothesis: I am 95% confident that individuals with higher depression levels will have lower incomes across all age groups, with particularly the younger age groups showing a stronger negative correlation between depression and income compared to older age groups.
+
+#First I'm measuring wage so display that: 
+
+library(forcats)
+Household_Pulse_data$income_midpoint <- fct_recode(Household_Pulse_data$INCOME, 
+                                                   "12500" = "HH income less than $25k",
+                                                   "30000" = "HH income $25k - $34.9k",
+                                                   "40000" = "HH income $35k - 49.9",
+                                                   "62500" = "HH income $50k - 74.9",
+                                                   "82500" = "HH income $75 - 99.9",
+                                                   "125000" = "HH income $100k - 149",
+                                                   "175000" = "HH income $150 - 199",
+                                                   "225000" = "HH income $200k +",
+                                                   NULL = "NA")
+Household_Pulse_data$income_midpoint <- as.numeric(levels(Household_Pulse_data$income_midpoint))[Household_Pulse_data$income_midpoint]
+
+summary(Household_Pulse_data$income_midpoint )
+#The variables I want to focus on DEPRESSION LEVELS & AGE 
+
+Household_Pulse_data$Age <- 2024 - Household_Pulse_data$TBIRTH_YEAR
+
+#Work base
+
+## Narrowing down the dataset
+depression_income <- Household_Pulse_data %>%
+  filter(DOWN %in% c("nearly every day", "several days over past 2 wks", "no days in past 2 wks feeling depressed") &
+           Age >= 25 & Age <= 55)
+#View(race_income)
+#summary(race_income)
+```
+
+
+
+```{r}
+
+depression_income <- depression_income %>%
+  mutate(DOWN_recode = case_when(
+    DOWN %in% c("nearly every day", "several days over past 2 wks") ~ "High Depression",
+    DOWN == "no days in past 2 wks feeling depressed" ~ "Low Depression"
+  ))
+
+```
+
+
+```{r}
+model_2 <- lm(income_midpoint  ~ Age + DOWN_recode, data = depression_income)  
+confint(model_2, level = 0.95)
+t_test_result <- t.test(income_midpoint ~ DOWN_recode, data = depression_income)
+t_test_result$p.value
+t_test_result$conf.int #format(p_value, scientific = FALSE)
+summary(model_2)
+
+
+```
+
+##Heat Map Model_2
+```{r}
+# Load necessary library
+library(plotly)
+
+# Prediction for ages 35+ with high depression
+Prediction_high_depression <- data.frame(Age = 35:55, DOWN_recode = "High Depression")
+Prediction_high_depression$Income <- predict(model_2, newdata = Prediction_high_depression)
+
+# Prediction for ages 25-35 with low depression
+Prediction_low_depression <- data.frame(Age = 25:35, DOWN_recode = "Low Depression")
+Prediction_low_depression$Income <- predict(model_2, newdata = Prediction_low_depression)
+
+# Prediction for ages 25-35 with high depression (to cover all cases)
+Prediction_high_depression_young <- data.frame(Age = 25:35, DOWN_recode = "High Depression")
+Prediction_high_depression_young$Income <- predict(model_2, newdata = Prediction_high_depression_young)
+
+# Prediction for ages 35+ with low depression (to cover all cases)
+Prediction_low_depression_old <- data.frame(Age = 35:55, DOWN_recode = "Low Depression")
+Prediction_low_depression_old$Income <- predict(model_2, newdata = Prediction_low_depression_old)
+
+# Combine all predictions into a single data frame
+combined_predictions <- rbind(Prediction_high_depression, Prediction_low_depression, 
+                              Prediction_high_depression_young, Prediction_low_depression_old)
+
+# Plot the heatmap using the combined predictions
+p <- plot_ly(combined_predictions, x = ~Age, y = ~DOWN_recode, z = ~Income, type = "heatmap",
+             colorscale = "Viridis") %>%
+  layout(title = "Heatmap of Predicted Income by Age and Depression Level",
+         xaxis = list(title = "Age"),
+         yaxis = list(title = "Depression Level"),
+         colorbar = list(title = "Predicted Income"))
+
+# Display the plot
+p
+```
+
+##The null hypothesis which claims depression levels and age have no impact on income is rejected because the P-value for this dataset is extremely small and much smaller than 0.05. Additionally, it fails to fall between the two significant levels. 
+#The Confidence Interval which is 95%: [-31749.31 -28444.50] does not contain zero.
+#This indicates a statistically significant difference in income among various ages of high and low depression levels.
+
+#Conclusion
+
+#Based on our analysis, we can confidently conclude that depression levels and age signficantly impact wages. People with low depression levels make more money than people with high depression levels. However, within each depression level, older individuals make a higher salary than the younger workers.The rejection of the null hypothesis, supported by an extremely small P-value, indicates that age and mental health states play a big role in how much one's salary is. Additionally, the 95% confidence interval, ranging from [-31749.31 -28444.50], does not include zero, further reinforcing the existence of a statistically significant difference in income between workers of different ages and depression levels. 
+
+
+
+#Sample 3
+#Sample: We want to determine whether the region of residence in the United States affects income. Specifically, we have chosen to focus on two regions, the Northeast and the South, due to their historical, cultural, and economic differences. Additionally, we have limited our sample to adults aged 25 to 55 who hold Advanced, Bachelor's, or Associate's degrees.
+
+#Null Hypothesis: There is an 85% confidence that the region where you live or were born affects your income.
+
+
+```{r}
+library(dplyr)
+region_income <- Household_Pulse_data %>%
+  filter(EEDUC %in% c("assoc deg", "bach deg", "adv deg") &
+         (REGION == "Northeast" | REGION == "South") &
+         Age >= 25 & Age <= 55)
+  View(region_income)
+summary(region_income)
+```
+
+
+```{r cars}
+model_A <- lm(income_midpoint  ~ Age + EEDUC, data = region_income)
+confint(model_A, level = 0.85)
+t_test_result <- t.test(income_midpoint ~ REGION, data = region_income)
+t_test_result$p.value
+t_test_result$conf.int
+summary(model_A)
+# maybe get fancy
+library(modelsummary)
+modelsummary(model_A, stars = TRUE, gof_map = c("nobs", "r.squared"))
+NNobs <- length(region_income$income_midpoint)
+set.seed(12345) # just so you can replicate and get same "random" choices
+graph_obs <- (runif(NNobs) < 0.1) # so something like just 1/10 as many obs
+region_graph <-subset(region_income,graph_obs)
+library(ggplot2)
+library(ggthemes)
+ggplot(region_graph, aes(x = interaction(REGION, EEDUC), y = income_midpoint, color = REGION)) +
+  geom_jitter(shape = 16, alpha = 1.0, size = 3) +
+  ylim(0, 120000) +
+  labs(title = "Income Midpoint by Race and Education Level",
+       x = "Region Income",
+       y = "Income Midpoint") +
+  theme_economist_white() +
+  scale_color_brewer(palette = "Set1") +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),  # Adjusts vertical position of the x-axis labels
+    axis.text.y = element_text(angle = 0, hjust = 0.5)             # Keeps y-axis text aligned properly
+  )
+```
+## Including Plots
+#You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+library(plotly)
+
+PredictionA <- data.frame(Age = 25:55, REGION = "Northeast", EEDUC = "adv deg")
+PredictionA$yhat <- predict(model_A, newdata = PredictionA)
+PredictionB <- data.frame(Age = 25:55, REGION = "South", EEDUC = "adv deg")
+PredictionB$yhat <- predict(model_A, newdata = PredictionB)
+y_range <- range(c(PredictionA$yhat, PredictionB$yhat))
+y_padding <- 0.1 * diff(y_range)  # Add 10% padding to the range
+
+RNE <- plot_ly() %>%
+  add_lines(x = PredictionA$Age, y = PredictionA$yhat, name = "Northeast",
+            line = list(color = 'blue')) %>%
+   layout(title = "Predicted Income by Age for Northeast with Advanced Degree",
+        xaxis = list(title = "Age"),
+         yaxis = list(title = "Predicted Income Midpoint", range = c(y_range[1] - y_padding, y_range[2] + y_padding)),
+         showlegend = TRUE)
+RS <- plot_ly() %>% add_lines(x = PredictionB$Age, y = PredictionB$yhat, name = "South",
+            line = list(color = 'red')) %>%
+ layout(title = "Predicted Income by Age for South with Advanced Degree",
+        xaxis = list(title = "Age"),
+         yaxis = list(title = "Predicted Income Midpoint", range = c(y_range[1] - y_padding, y_range[2] + y_padding)),
+         showlegend = TRUE)
+# Display the plot
+RNE
+RS
+```
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+##Conclusion: We reject the null hypothesis because the p-value is less than the significance level. Our sample of people with degrees does not show any significant differences in income between regions. A more suitable sample might focus on factors like property ownership or eviction rates, which could provide better insights into wealth disparities between regions in the United States.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
